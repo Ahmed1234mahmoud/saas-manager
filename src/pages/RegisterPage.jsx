@@ -13,6 +13,9 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // استدعاء عنوان السيرفر من ملف الـ .env
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const passwordRequirements = [
     { label: 'At least 8 characters', met: password.length >= 8 },
     { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
@@ -34,8 +37,8 @@ export default function RegisterPage() {
     setError('')
 
     try {
-      // ✅ نبعت الاسم والإيميل بعد تنظيف المسافات الزائدة
-      const response = await axios.post('http://localhost:5000/api/register', {
+      // ✅ نستخدم المتغير الجديد هنا عشان الربط يشتغل صح
+      const response = await axios.post(`${API_URL}/api/register`, {
         name: name.trim(),
         email: email.trim(),
         password: password
@@ -46,7 +49,6 @@ export default function RegisterPage() {
         navigate('/login') 
       }
     } catch (err) {
-      // عرض رسالة الخطأ من السيرفر (مثل: الإيميل موجود مسبقاً)
       setError(err.response?.data?.message || 'Registration failed')
     } finally {
       setIsLoading(false)
