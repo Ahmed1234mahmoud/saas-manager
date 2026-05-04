@@ -9,6 +9,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import toast from 'react-hot-toast';
 
+// العنوان الموحد للسيرفر بتاعك على Railway
+const API_BASE_URL = "https://saas-backend-production-a778.up.railway.app/api";
+
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,16 +24,21 @@ const TasksPage = () => {
   });
 
   const savedUser = JSON.parse(localStorage.getItem('user'));
-  const userId = savedUser?.id || savedUser?._id || "12345";
+  const userId = savedUser?.id || savedUser?._id;
 
-  // 1. جلب المهام
+  // 1. جلب المهام من السيرفر
   useEffect(() => {
+    if (!userId) {
+      toast.error("Please login first");
+      return;
+    }
+
     const fetchTasks = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/tasks/${userId}`);
+        const response = await axios.get(`${API_BASE_URL}/tasks/${userId}`);
         setTasks(response.data);
       } catch (err) { 
-        toast.error("Failed to load tasks"); 
+        toast.error("Failed to load tasks from server"); 
       } finally {
         setIsLoading(false);
       }
@@ -38,42 +46,44 @@ const TasksPage = () => {
     fetchTasks();
   }, [userId]);
 
-  // 2. معالجة السحب والإفلات
+  // 2. معالجة السحب والإفلات وتحديث السيرفر
   const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
     if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) return;
 
     const newTasks = Array.from(tasks);
     const draggedTask = newTasks.find(t => t._id === draggableId);
+    if (!draggedTask) return;
+
     draggedTask.status = destination.droppableId;
     setTasks(newTasks);
 
     try {
-      await axios.patch(`http://localhost:5000/api/tasks/${draggableId}`, { status: destination.droppableId });
+      await axios.patch(`${API_BASE_URL}/tasks/${draggableId}`, { status: destination.droppableId });
       toast.success(`Moved to ${destination.droppableId.replace('-', ' ')}`, { icon: '🚀' });
     } catch (err) { 
-      toast.error("Update failed");
+      toast.error("Update failed on server");
     }
   };
 
-  // 3. إضافة مهمة جديدة
+  // 3. إضافة مهمة جديدة للسيرفر
   const handleAddTask = async (e) => {
     e.preventDefault();
     if (!newTaskData.title.trim()) return toast.error("Title is required");
 
     const loadToast = toast.loading("Creating task...");
     try {
-      const response = await axios.post('http://localhost:5000/api/tasks', { userId, ...newTaskData });
+      const response = await axios.post(`${API_BASE_URL}/tasks`, { userId, ...newTaskData });
       setTasks([...tasks, response.data]);
       setIsModalOpen(false);
       toast.success("Task created!", { id: loadToast });
       setNewTaskData({ title: '', priority: 'medium', status: 'todo', deadline: new Date().toISOString().split('T')[0] });
     } catch (err) { 
-      toast.error("Failed to create", { id: loadToast }); 
+      toast.error("Failed to create task", { id: loadToast }); 
     }
   };
 
-  // 4. حذف مهمة (بالشكل الجديد المدمج مع التنبيهات)
+  // 4. حذف مهمة من السيرفر
   const handleDeleteTask = async (taskId) => {
     toast((t) => (
       <div className="flex items-center gap-3">
@@ -83,7 +93,7 @@ const TasksPage = () => {
           onClick={async () => {
             toast.dismiss(t.id);
             try {
-              await axios.delete(`http://localhost:5000/api/tasks/${taskId}`);
+              await axios.delete(`${API_BASE_URL}/tasks/${taskId}`);
               setTasks(tasks.filter(task => task._id !== taskId));
               toast.success("Deleted successfully");
             } catch { toast.error("Delete failed"); }
@@ -102,7 +112,6 @@ const TasksPage = () => {
     { name: 'Done', key: 'done' }
   ];
 
-  // إحصائيات الـ Dashboard
   const chartData = columns.map(col => ({
     name: col.name,
     value: tasks.filter(t => t.status === col.key).length
@@ -136,7 +145,7 @@ const TasksPage = () => {
         </button>
       </div>
 
-      {/* Statistics Section (الرسم البياني رجع هنا) */}
+      {/* Statistics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         <div className="lg:col-span-1 grid grid-cols-1 gap-4">
           {stats.map((stat, i) => (
